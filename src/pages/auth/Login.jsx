@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../../redux/slices/authSlice";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import SkeletonDashboard from "../../components/SkeletonDashboard";
 
 export default function Login() {
   const dispatch = useDispatch();
@@ -21,6 +22,10 @@ export default function Login() {
   const onSubmit = (data) => {
     dispatch(loginUser(data));
   };
+
+  if(loading){
+    return <SkeletonDashboard/>
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 sm:px-6 md:px-8">
