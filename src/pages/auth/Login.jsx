@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../../redux/slices/authSlice";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
-import SkeletonDashboard from "../../components/SkeletonDashboard";
 
 export default function Login() {
   const dispatch = useDispatch();
@@ -23,12 +22,15 @@ export default function Login() {
     dispatch(loginUser(data));
   };
 
-  if(loading){
-    return <SkeletonDashboard/>
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 sm:px-6 md:px-8">
+      
+      {loading && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="w-12 h-12 rounded-full animate-spin border-4 border-dashed border-blue-600"></div>
+        </div>
+      )}
+
       <div className="w-full max-w-md bg-white rounded-xl shadow-md p-6 sm:p-8">
         <h2 className="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-6">
           Login to <span className="text-blue-600">SAARTHI</span>
@@ -37,7 +39,10 @@ export default function Login() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* Email */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700"
+            >
               Email
             </label>
             <input
@@ -64,7 +69,10 @@ export default function Login() {
 
           {/* Password with eye icon */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700"
+            >
               Password
             </label>
             <div className="relative">
@@ -95,7 +103,10 @@ export default function Login() {
 
           {/* Forgot Password */}
           <div className="text-sm text-right">
-            <Link to="/forgot-password" className="text-blue-600 hover:underline">
+            <Link
+              to="/forgot-password"
+              className="text-blue-600 hover:underline"
+            >
               Forgot password?
             </Link>
           </div>
@@ -112,7 +123,10 @@ export default function Login() {
           {/* Register Link */}
           <p className="text-sm text-center text-gray-600">
             Don’t have an account?{" "}
-            <Link to="/register" className="text-blue-600 font-medium hover:underline">
+            <Link
+              to="/register"
+              className="text-blue-600 font-medium hover:underline"
+            >
               Register here
             </Link>
           </p>

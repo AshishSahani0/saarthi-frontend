@@ -33,7 +33,7 @@ export default function App() {
     }
   }, [user, isAuthenticated, navigate]);
 
-  if (loading || isAuthenticated === null) return <AppLoading />;
+  //if (loading || isAuthenticated === null) return <AppLoading />;
 
   return (
     <>
