@@ -1,0 +1,15 @@
+# This file is used for Netlify configuration, including build settings and redirects.
+
+[build]
+  # Set the publish directory (change 'dist' if your build output is different, e.g., 'build')
+  publish = "dist" 
+  
+# --- Redirects for Single Page Applications (SPA) ---
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# The configuration above tells Netlify:
+# "Redirect every path ('/*') that doesn't match a file to the index.html file, 
+# and return a 200 OK status code."
