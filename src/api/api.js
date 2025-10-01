@@ -36,11 +36,10 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      /*
+      
       if (originalRequest.url?.endsWith("/auth/me")) {
         return Promise.reject(error); // Don't retry on initial load
-      }
-      */
+      
 
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
