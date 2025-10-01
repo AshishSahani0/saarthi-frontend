@@ -39,7 +39,8 @@ api.interceptors.response.use(
       
       if (originalRequest.url?.endsWith("/auth/me")) {
         return Promise.reject(error); // Don't retry on initial load
-      
+      }
+
 
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
