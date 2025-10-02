@@ -71,7 +71,7 @@ export const loginUser = createAsyncThunk(
           // The token is returned in the body (from sendToken.js)
           // Store it in a *non-http-only* cookie for the front-end to read
           // Note: The expiry must match the server-set cookie's expiry
-          const expiryInDays = parseInt(import.meta.env.VITE_COOKIE_EXPIRE || "1", 10); 
+          //const expiryInDays = parseInt(import.meta.env.VITE_COOKIE_EXPIRE || "1", 10); 
           Cookies.set("token", data.token, { expires: expiryInDays, sameSite: 'Lax', secure: true });
           api.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
       }
