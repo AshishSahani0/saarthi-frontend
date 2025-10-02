@@ -1,11 +1,12 @@
+// src/layout/Navbar.jsx
+
 import { useDispatch, useSelector } from "react-redux";
 import { logoutUser } from "../redux/slices/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Cog6ToothIcon, Bars3Icon } from "@heroicons/react/24/outline"; // Import Bars3Icon
+import { Cog6ToothIcon, Bars3Icon } from "@heroicons/react/24/outline";
 import SettingsPopup from "../popups/SettingsPopup";
 
-// Add onMenuToggle prop
 export default function Navbar({ onMenuToggle }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -34,12 +35,15 @@ export default function Navbar({ onMenuToggle }) {
         flex items-center justify-between 
         bg-white/90 dark:bg-gray-800/90
         backdrop-blur-lg border-b border-white/20 dark:border-gray-700
-        shadow-lg md:ml-64 md:w-[calc(100%-16rem)]" // <-- Adjusting width for desktop sidebar
+        shadow-lg
+        
+        /* DESKTOP FIX: Anchor to the left side of the content area */
+        md:fixed md:left-64 md:w-[calc(100%-16rem)]" // Ensure 16rem matches w-64 Sidebar
       >
         {/* Mobile Menu Button (Visible below medium size) */}
         <div className="flex items-center">
             <button
-                onClick={onMenuToggle} // Use the prop to toggle the mobile menu
+                onClick={onMenuToggle}
                 className="md:hidden p-2 mr-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition rounded-md"
                 aria-label="Open sidebar menu"
             >

@@ -1,3 +1,5 @@
+// src/layout/Sidebar.jsx
+
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { useState, useEffect } from "react";
@@ -135,7 +137,7 @@ export default function Sidebar({ isMobileOpen, setMobileOpen }) {
                           className={`block px-3 py-2 rounded-md transition-all
                             ${
                               isActive
-                                ? "bg-blue-600 text-white" // <-- Improved active state color
+                                ? "bg-blue-600 text-white" 
                                 : "text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-gray-700"
                             }`}
                         >
@@ -157,7 +159,7 @@ export default function Sidebar({ isMobileOpen, setMobileOpen }) {
                 className={`block px-3 py-2 rounded-lg transition-all
                   ${
                     isActive
-                      ? "bg-blue-600 text-white shadow-md" // <-- Improved active state color
+                      ? "bg-blue-600 text-white shadow-md" 
                       : "text-gray-800 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-gray-700"
                   }`}
               >
@@ -180,7 +182,7 @@ export default function Sidebar({ isMobileOpen, setMobileOpen }) {
 
   return (
     <>
-      {/* Desktop View: Always fixed on the left */}
+      {/* Desktop View: Fixed on the left, slightly lower z-index than Navbar */}
       <div className="hidden md:block fixed top-0 left-0 h-full w-64 z-30">
         <SidebarContent />
       </div>

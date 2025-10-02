@@ -1,37 +1,39 @@
 // src/layout/DashboardLayout.jsx
 
 import { Outlet } from "react-router-dom";
-import { useState } from "react"; // 1. Import useState
+import { useState } from "react"; 
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
-import FloatingActions from "../components/FloatingActions"; // Ensure this path is correct
+import FloatingActions from "../components/FloatingActions"; 
 
 export default function DashboardLayout() {
-  // 2. State to manage the mobile menu visibility
   const [isMobileOpen, setMobileOpen] = useState(false);
 
-  // 3. Toggle function to open/close the mobile menu
   const toggleMobileMenu = () => {
     setMobileOpen(prev => !prev);
   };
   
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    // Use flex-row and h-screen to establish the main split screen layout
+    <div className="flex w-full min-h-screen bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       
-      {/* Sidebar: Pass the mobile state and setter */}
+      {/* 1. Sidebar (Fixed on Desktop, Controlled on Mobile) */}
       <Sidebar 
         isMobileOpen={isMobileOpen} 
         setMobileOpen={setMobileOpen} 
       />
 
-      <div className="flex-1 flex flex-col md:ml-64 backdrop-blur-lg bg-white/30 dark:bg-gray-800/30 border-l border-white/20 dark:border-gray-700 transition-all duration-300">
+      {/* 2. Main Content Area */}
+      {/* md:w-full is required to fill the remaining space when ml-64 is set */}
+      <div className="flex-1 flex flex-col md:w-[calc(100%-16rem)] md:ml-64 transition-all duration-300">
         
-        {/* Navbar: Pass the toggle function */}
+        {/* Navbar (Fixed to the top of the content area) */}
         <Navbar 
           onMenuToggle={toggleMobileMenu} 
         />
         
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {/* The main content area, providing space below the fixed Navbar */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 mt-16">
           <Outlet />
         </main>
       </div>
