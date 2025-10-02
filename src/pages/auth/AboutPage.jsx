@@ -1,134 +1,190 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-// IMPORTANT: You need to ensure these images exist in your /src/assets/images folder
-// and are correctly imported. Since I don't have your specific file system, 
-// I will import them as variables, which is the standard React way.
-// The actual path will be relative to the HomePage.jsx file location.
 
-// Assuming the images are placed within a generic assets/images folder or similar
+// IMPORTANT: Ensure these image paths are correct relative to this file
 import harshitImage from '../../assets/Harshit.png';
 import sudhaImage from '../../assets/sudha.png';
 import ayushImage from '../../assets/ayush.png';
 import ashImage from '../../assets/ash.png';
 import prakImage from '../../assets/prak.png';
 import namitImage from '../../assets/namit.png';
-import '../../static/css/about.css'; // Assuming you have a CSS file for this page
 
 const AboutPage = () => {
-  return (
-    <>
-      {/* Navbar - This should be a separate component in your final app */}
-      <header>
-        <nav className="navbar">
-          <div className="logo">Saarthi</div>
-          <ul className="nav-links">
-            <li><Link to="/home">Home</Link></li>
-            <li><Link to="/about" className="active">About</Link></li>
-            <li><Link to="/resources">Resources</Link></li>
-            <li><Link to="/login" className="btn">Begin your Journey</Link></li>
-          </ul>
-        </nav>
-      </header>
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-      {/* Hero Section */}
-      <section className="hero">
-        <div className="hero-content">
-          <h1>About <span>Saarthi</span></h1>
-          <p>Your trusted companion for mental health and student wellbeing</p>
-        </div>
-      </section>
+  // Define a reusable component for the Team Member card
+  const TeamCard = ({ src, name, role }) => (
+    <div className="flex flex-col items-center p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
+      <div className="w-32 h-32 md:w-40 md:h-40 overflow-hidden rounded-full ring-4 ring-blue-500 ring-opacity-50 mb-4">
+        <img 
+          src={src} 
+          alt={name} 
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <h3 className="text-xl font-bold text-gray-800 text-center">{name}</h3>
+      <p className="text-blue-600 font-medium text-center">{role}</p>
+    </div>
+  );
 
-      {/* Mission / Vision Cards */}
-      <section className="features">
-        <h2>Our Purpose</h2>
-        <div className="cards">
-          <div className="card">
-            <h3>🎯 Mission</h3>
-            <p>Empowering students with accessible mental wellness tools, counseling, and support community.</p>
-          </div>
-          <div className="card">
-            <h3>💡 Approach</h3>
-            <p>Blending AI-guided support, peer connections, and professional guidance for holistic care.</p>
-          </div>
-          <div className="card">
-            <h3>🌍 Why Saarthi?</h3>
-            <p>Designed for Indian students with language support, offline access, and institutional collaboration.</p>
-          </div>
-        </div>
-      </section>
+  return (
+    <>
+      {/* -------------------- Navbar (Responsive) -------------------- */}
+      <header className="sticky top-0 z-50 bg-white shadow-md">
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="text-2xl font-extrabold text-blue-600">Saarthi</div>
+          
+          {/* Desktop Links */}
+          <ul className="hidden lg:flex space-x-8 items-center">
+            <li><Link to="/home" className="text-gray-700 hover:text-blue-600 transition-colors">Home</Link></li>
+            <li><Link to="/about" className="text-blue-600 font-semibold border-b-2 border-blue-600">About</Link></li>
+            <li><Link to="/resources" className="text-gray-700 hover:text-blue-600 transition-colors">Resources</Link></li>
+            <li>
+              <Link to="/login" className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md">
+                Begin your Journey
+              </Link>
+            </li>
+          </ul>
 
-      {/* Timeline Section */}
-      <section className="timeline-section">
-        <h2>Our Journey</h2>
-        <div className="timeline">
-          <div className="timeline-item left">
-            <div className="content">
-              <h3>2023</h3>
-              <p>Idea conceptualized by educators & students passionate about mental wellness.</p>
-            </div>
-          </div>
-          <div className="timeline-item right">
-            <div className="content">
-              <h3>2024</h3>
-              <p>Prototype tested in colleges with positive engagement from students.</p>
-            </div>
-          </div>
-          <div className="timeline-item left">
-            <div className="content">
-              <h3>2025</h3>
-              <p>Official launch, reaching thousands of students across India.</p>
-            </div>
-          </div>
-        </div>
-      </section>
+          {/* Mobile/Tablet Actions */}
+          <div className="flex items-center space-x-3 lg:hidden">
+            {/* 1. Mobile Login Button (Visible on mobile, hidden on desktop) */}
+            <Link 
+              to="/login" 
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors shadow-md"
+            >
+              Login
+            </Link>
+            
+            {/* 2. Mobile Menu Button (Hamburger) */}
+            <button 
+              className="text-gray-700 focus:outline-none"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle navigation"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isMobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}></path>
+              </svg>
+            </button>
+          </div>
+        </nav>
+        
+        {/* Mobile Menu Dropdown (When open) */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden px-4 pt-2 pb-4 space-y-2 bg-gray-50 border-t">
+            <Link to="/home" className="block px-3 py-2 text-base font-medium text-gray-700 hover:bg-blue-50 rounded-md">Home</Link>
+            <Link to="/about" className="block px-3 py-2 text-base font-medium text-blue-600 hover:bg-blue-50 rounded-md">About</Link>
+            <Link to="/resources" className="block px-3 py-2 text-base font-medium text-gray-700 hover:bg-blue-50 rounded-md">Resources</Link>
+            {/* The Login/Journey button is now prominently placed next to the hamburger icon */}
+          </div>
+        )}
+      </header>
 
-      {/* Team Section */}
-      <section className="team-section">
-        <h2>Meet Our Team</h2>
-        <div className="team-cards">
-          <div className="team-card">
-            <img src={harshitImage} alt="Harshit Nainwal"/>
-            <h3>Harshit Nainwal</h3>
-            <p>Frontend & UI</p>
-          </div>
-          <div className="team-card">
-            <img src={sudhaImage} alt="Sudhanshu Mishra"/>
-            <h3>Sudhanshu Mishra</h3>
-            <p>Leader</p>
-          </div>
-          <div className="team-card">
-            <img src={ayushImage} alt="Ayush Kumar Mandal"/>
-            <h3>Ayush Kumar Mandal</h3>
-            <p>Student Advisor </p>
-          </div>
-          <div className="team-card">
-            <img src={ashImage} alt="Ashish Sahani"/>
-            <h3>Ashish Sahani </h3>
-            <p>Backend & Database</p>
-          </div>
-          <div className="team-card">
-            <img src={prakImage} alt="Prakriti Srivastava"/>
-            <h3>Prakriti Srivastava</h3>
-            <p>Documentation </p>
-          </div>
-          <div className="team-card">
-            <img src={namitImage} alt="Namit Raj"/>
-            <h3>Namit Raj</h3>
-            <p>Research & AI Developer</p>
-          </div>
-        </div>
-      </section>
+      {/* -------------------- Hero Section (Responsive) -------------------- */}
+      <section className="bg-gray-50 py-16 md:py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-4">
+            About <span className="text-blue-600">Saarthi</span>
+          </h1>
+          <p className="text-lg sm:text-xl text-gray-600 max-w-3xl mx-auto">
+            Your trusted companion for mental health and student wellbeing
+          </p>
+        </div>
+      </section>
 
-      {/* Footer - This should be a separate component in your final app */}
-      <footer>
-        <div className="footer-content">
-          <p>&copy; 2025 Saarthi | All Rights Reserved</p>
-          <p>Contact: support@saarthi.org | Helpline: +91-1234567890</p>
-          <p>Address: NIET, Greater Noida</p>
-        </div>
-      </footer>
-    </>
-  );
+      {/* -------------------- Mission / Vision Cards (Responsive) -------------------- */}
+      <section className="py-16 md:py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl sm:text-4xl font-bold text-center text-gray-800 mb-12">Our Purpose</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Card 1 */}
+            <div className="p-6 border-t-4 border-blue-600 rounded-xl shadow-md text-center">
+              <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center">
+                <span className="text-3xl mr-2">🎯</span> Mission
+              </h3>
+              <p className="text-gray-600">Empowering students with accessible mental wellness tools, counseling, and support community.</p>
+            </div>
+            {/* Card 2 */}
+            <div className="p-6 border-t-4 border-blue-600 rounded-xl shadow-md text-center">
+              <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center">
+                <span className="text-3xl mr-2">💡</span> Approach
+              </h3>
+              <p className="text-gray-600">Blending AI-guided support, peer connections, and professional guidance for holistic care.</p>
+            </div>
+            {/* Card 3 */}
+            <div className="p-6 border-t-4 border-blue-600 rounded-xl shadow-md text-center">
+              <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center">
+                <span className="text-3xl mr-2">🌍</span> Why Saarthi?
+              </h3>
+              <p className="text-gray-600">Designed for Indian students with language support, offline access, and institutional collaboration.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* -------------------- Timeline Section (Responsive) -------------------- */}
+      <section className="py-16 md:py-24 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl sm:text-4xl font-bold text-center text-gray-800 mb-12">Our Journey</h2>
+          
+          <div className="relative border-l-4 border-blue-600 space-y-12 ml-4 sm:ml-12 md:ml-24">
+            
+            {/* Item 1 */}
+            <div className="relative pl-6">
+              <div className="absolute w-4 h-4 bg-blue-600 rounded-full mt-1 -left-2"></div>
+              <div className="bg-white p-6 rounded-lg shadow-md max-w-lg">
+                <h3 className="text-2xl font-bold text-blue-600 mb-2">2023</h3>
+                <p className="text-gray-700">Idea conceptualized by educators & students passionate about mental wellness.</p>
+              </div>
+            </div>
+
+            {/* Item 2 */}
+            <div className="relative pl-6">
+              <div className="absolute w-4 h-4 bg-blue-600 rounded-full mt-1 -left-2"></div>
+              <div className="bg-white p-6 rounded-lg shadow-md max-w-lg">
+                <h3 className="text-2xl font-bold text-blue-600 mb-2">2024</h3>
+                <p className="text-gray-700">Prototype tested in colleges with positive engagement from students.</p>
+              </div>
+            </div>
+
+            {/* Item 3 */}
+            <div className="relative pl-6">
+              <div className="absolute w-4 h-4 bg-blue-600 rounded-full mt-1 -left-2"></div>
+              <div className="bg-white p-6 rounded-lg shadow-md max-w-lg">
+                <h3 className="text-2xl font-bold text-blue-600 mb-2">2025</h3>
+                <p className="text-gray-700">Official launch, reaching thousands of students across India.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* -------------------- Team Section (Responsive Grid) -------------------- */}
+      <section className="py-16 md:py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl sm:text-4xl font-bold text-center text-gray-800 mb-12">Meet Our Team</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-8">
+            <TeamCard src={harshitImage} name="Harshit Nainwal" role="Frontend & UI" />
+            <TeamCard src={sudhaImage} name="Sudhanshu Mishra" role="Leader" />
+            <TeamCard src={ayushImage} name="Ayush Kumar Mandal" role="Student Advisor" />
+            <TeamCard src={ashImage} name="Ashish Sahani" role="Backend & Database" />
+            <TeamCard src={prakImage} name="Prakriti Srivastava" role="Documentation" />
+            <TeamCard src={namitImage} name="Namit Raj" role="Research & AI Developer" />
+          </div>
+        </div>
+      </section>
+
+      {/* -------------------- Footer (Responsive) -------------------- */}
+      <footer className="bg-gray-800 text-white py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-2">
+          <p className="text-sm md:text-base">&copy; 2025 Saarthi | All Rights Reserved</p>
+          <p className="text-xs md:text-sm">Contact: support@saarthi.org | Helpline: +91-1234567890</p>
+          <p className="text-xs md:text-sm">Address: NIET, Greater Noida</p>
+        </div>
+      </footer>
+    </>
+  );
 };
 
 export default AboutPage;
