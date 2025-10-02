@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../api/api";
 import { toast } from "react-toastify";
+import Cookies from "js-cookie";
 
 const VERIFICATION_EMAIL_KEY = "emailForVerification";
 
