@@ -73,6 +73,7 @@ export const loginUser = createAsyncThunk(
           // Note: The expiry must match the server-set cookie's expiry
           const expiryInDays = parseInt(import.meta.env.VITE_COOKIE_EXPIRE || "1", 10); 
           Cookies.set("token", data.token, { expires: expiryInDays, sameSite: 'Lax', secure: true });
+          api.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
       }
       // *** END OF NEW LOGIC ***
       
@@ -90,6 +91,7 @@ export const logoutUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const { data } = await api.get("/auth/logout", { withCredentials: true });
+      Cookies.remove("token", { path: '/' });
       return data;
     } catch (err) {
       return rejectWithValue(err.response?.data);
