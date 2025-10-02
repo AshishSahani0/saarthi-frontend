@@ -60,16 +60,27 @@ export const loadUser = createAsyncThunk(
 
 // Login (Server sets cookies; then load user data)
 export const loginUser = createAsyncThunk(
-  "auth/loginUser",
-  async (credentials, { rejectWithValue, dispatch }) => {
-    try {
-      const { data } = await api.post("/auth/login", credentials, { withCredentials: true });
-      await dispatch(loadUser());
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data);
-    }
-  }
+  "auth/loginUser",
+  async (credentials, { rejectWithValue, dispatch }) => {
+    try {
+      const { data } = await api.post("/auth/login", credentials, { withCredentials: true });
+
+      // *** ADD THIS LOGIC ***
+      if (data.token) {
+          // The token is returned in the body (from sendToken.js)
+          // Store it in a *non-http-only* cookie for the front-end to read
+          // Note: The expiry must match the server-set cookie's expiry
+          const expiryInDays = parseInt(import.meta.env.VITE_COOKIE_EXPIRE || "1", 10); 
+          Cookies.set("token", data.token, { expires: expiryInDays, sameSite: 'Lax', secure: true });
+      }
+      // *** END OF NEW LOGIC ***
+      
+      await dispatch(loadUser());
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data);
+    }
+  }
 );
 
 // Logout (Server clears cookies)
