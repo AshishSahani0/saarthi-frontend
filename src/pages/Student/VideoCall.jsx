@@ -1,5 +1,3 @@
-
-
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import Peer from "simple-peer";
@@ -38,19 +36,20 @@ export default function VideoCall({ roomId, user, booking }) {
   const [isMicOn, setIsMicOn] = useState(true);
   const [isLocalStreamReady, setIsLocalStreamReady] = useState(false);
 
-  // --- Initial Media Access and Socket Listeners ---
+  // --- Initial Media Access and Socket Listeners ---
   useEffect(() => {
     if (!user?._id || !booking) return;
 
+    // A. Get local media stream (CRITICAL: Needs both video and audio)
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then((stream) => {
         localStreamRef.current = stream;
         
-        // 1. Local Video setup (mirrored)
+        // Assign stream ONLY to local video element
         if (myVideo.current) {
-            myVideo.current.srcObject = stream;
-            myVideo.current.style.transform = 'scaleX(-1)';
-        }
+            myVideo.current.srcObject = stream;
+            myVideo.current.style.transform = 'scaleX(-1)';
+        }
 
         setIsLocalStreamReady(true);
         dispatch(setCallStatus("ready"));
@@ -58,8 +57,11 @@ export default function VideoCall({ roomId, user, booking }) {
       .catch((err) => {
         console.error("Failed to get media:", err);
         toast.error("Failed to access camera and microphone.");
+        // Set status to idle if media access failed
+        dispatch(setCallStatus("idle")); 
       });
 
+    // B. Socket Listeners
     const handleIncomingCall = ({ signal, from, bookingId }) => {
       if (bookingId === booking._id && callStatus !== "connected") {
         dispatch(setCallStatus("receiving"));
@@ -73,8 +75,8 @@ export default function VideoCall({ roomId, user, booking }) {
       dispatch(setAnswer(signal));
       dispatch(setCallStatus("connected"));
       
-      // CRITICAL: Initiator receives the answer signal
-      if (connectionRef.current) connectionRef.current.signal(signal);
+      // CRITICAL: Initiator receives the answer signal
+      if (connectionRef.current) connectionRef.current.signal(signal); 
     };
 
     // ICE candidates are handled directly in the peer.on('ice') handler below
@@ -99,7 +101,7 @@ export default function VideoCall({ roomId, user, booking }) {
 
     bookedSocket.on("incomingCall", handleIncomingCall);
     bookedSocket.on("callAccepted", handleCallAccepted);
-    bookedSocket.on("iceCandidate", handleRemoteIceCandidate); // Use dedicated handler
+    bookedSocket.on("iceCandidate", handleRemoteIceCandidate); 
     bookedSocket.on("callEnded", handleCallEnded);
 
     return () => {
@@ -111,47 +113,57 @@ export default function VideoCall({ roomId, user, booking }) {
       if (remoteStreamRef.current) remoteStreamRef.current.getTracks().forEach(t => t.stop());
       dispatch(clearVideoCall());
     };
-  }, [roomId, user, booking, dispatch, callStatus]);
+  }, [roomId, user, booking, dispatch, callStatus, navigate]); 
 
   useEffect(() => {
     if (!isLocalStreamReady || connectionRef.current) return;
 
-    const createPeer = (initiator) => {
-      const peer = new Peer({ initiator, trickle: true, stream: localStreamRef.current }); // Trickle: true is better
+    const createPeer = (initiator, currentOffer) => {
+      const peer = new Peer({ 
+          initiator, 
+          trickle: true, 
+          stream: localStreamRef.current, // Stream attached here
+          // **CRITICAL: Added STUN/TURN servers**
+          config: {
+              iceServers: [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:global.stun.twilio.com:3478' }
+              ]
+          }
+      }); 
 
       peer.on("signal", (signalData) => {
         if (initiator) {
-          // 2. CALLER: Send fresh offer signal
+          // 1. CALLER: Offer generated, send it over socket
           dispatch(setOffer(signalData));
           bookedSocket.emit("callUser", {
             userToCall: remotePeerId,
-            signalData: signalData, // MUST use signalData, not stale Redux 'offer'
+            signalData: signalData, 
             from: user._id,
             bookingId: booking._id,
           });
         } else {
-          // 3. RECEIVER: Send generated answer signal
+          // 2. RECEIVER: Answer generated, send it back
           dispatch(setAnswer(signalData));
           bookedSocket.emit("acceptCall", { to: remotePeerId, signal: signalData });
         }
       });
 
       peer.on("stream", (stream) => {
-        // 4. Attach remote stream (audio/video)
+        // 3. Attach remote stream (audio/video)
         remoteStreamRef.current = stream;
         if (userVideo.current) {
-            userVideo.current.srcObject = stream;
-            userVideo.current.muted = false; // Ensure audio is ON for remote peer
-        }
+            userVideo.current.srcObject = stream;
+            userVideo.current.muted = false; // Enable remote audio
+        }
       });
-      
-      // 5. Send local ICE candidates to remote peer
-      peer.on("ice", (candidate) => {
-        bookedSocket.emit("iceCandidate", { to: remotePeerId, candidate: candidate });
-      });
+      
+      // 4. Send local ICE candidates to remote peer (Trickle)
+      peer.on("ice", (candidate) => {
+        bookedSocket.emit("iceCandidate", { to: remotePeerId, candidate: candidate });
+      });
 
       peer.on("close", () => {
-        console.log("Peer connection closed");
         dispatch(clearVideoCall());
         navigate("/dashboard");
       });
@@ -163,19 +175,23 @@ export default function VideoCall({ roomId, user, booking }) {
       });
 
       connectionRef.current = peer;
+
+      // CRITICAL STEP FOR RECEIVER: Kickstart negotiation by signaling the received offer
+      if (!initiator && currentOffer) {
+          peer.signal(currentOffer);
+      }
     };
 
     // A. CALLER LOGIC: Initialize call
     if (callStatus === "ready" && remotePeerId && !connectionRef.current) {
-      createPeer(true);
+      createPeer(true, null); // Initiator, no offer yet
       dispatch(setCallStatus("calling"));
     }
 
     // B. RECEIVER LOGIC: Respond to call
     if (callStatus === "receiving" && offer && !connectionRef.current) {
-      createPeer(false);
-      connectionRef.current.signal(offer); // Use the offer from Redux to start answering
-      dispatch(setCallStatus("connected")); // Set status once the answer peer is ready
+      createPeer(false, offer); // Receiver, pass the Redux offer directly
+      dispatch(setCallStatus("connected")); // Set status once peer is ready
     }
 
     // C. Handle queued ICE Candidates
