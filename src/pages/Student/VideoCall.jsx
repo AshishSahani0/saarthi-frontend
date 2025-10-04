@@ -28,21 +28,17 @@ export default function VideoCall({ roomId, user, booking }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { callStatus, offer, answer, remotePeerId, iceCandidates } = useSelector(
-    (state) => state.video
-  );
+  const { callStatus, offer, remotePeerId, iceCandidates } = useSelector((state) => state.video);
 
   const myVideo = useRef(null);
   const userVideo = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
-  const remoteStreamRef = useRef(null);
 
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isLocalReady, setIsLocalReady] = useState(false);
 
-  // Acquire local media & set up socket listeners
   useEffect(() => {
     if (!user?._id || !booking) return;
 
@@ -52,7 +48,8 @@ export default function VideoCall({ roomId, user, booking }) {
         localStreamRef.current = stream;
         if (myVideo.current) {
           myVideo.current.srcObject = stream;
-          myVideo.current.style.transform = "scaleX(-1)";
+          myVideo.current.muted = true; // ensure self video is muted
+          myVideo.current.play().catch(console.warn);
         }
         setIsLocalReady(true);
         dispatch(setCallStatus("ready"));
@@ -64,29 +61,30 @@ export default function VideoCall({ roomId, user, booking }) {
       });
 
     const onCallOffer = (signal, fromPeerId, bookingId) => {
-      console.log("📩 onCallOffer", { signal, fromPeerId, bookingId });
-      // Make sure this offer is for this booking context
-      if (bookingId === booking._id) {
-        dispatch(setRemotePeerId(fromPeerId));
-        dispatch(setOffer(signal));
-        dispatch(setCallStatus("receiving"));
-        toast.info("Incoming video call...");
-      }
+      if (bookingId !== booking._id) return;
+      dispatch(setRemotePeerId(fromPeerId));
+      dispatch(setOffer(signal));
+      dispatch(setCallStatus("receiving"));
+      toast.info("Incoming video call...");
     };
+
     const onCallAnswer = (signal) => {
-      console.log("📩 onCallAnswer", signal);
-      dispatch(setAnswer(signal));
-      dispatch(setCallStatus("connected"));
       if (peerRef.current) {
         peerRef.current.signal(signal);
+      } else {
+        dispatch(setAnswer(signal)); // fallback
       }
     };
+
     const onIce = (candidate) => {
-      console.log("📩 onIceCandidate (socket)", candidate);
-      dispatch(addIceCandidate(candidate));
+      if (peerRef.current) {
+        peerRef.current.signal(candidate);
+      } else {
+        dispatch(addIceCandidate(candidate));
+      }
     };
+
     const onCallEnd = () => {
-      console.log("📩 onCallEnded");
       cleanupCall();
       toast.info("Call ended by remote");
     };
@@ -103,58 +101,45 @@ export default function VideoCall({ roomId, user, booking }) {
       bookedSocket.off("callEnded", onCallEnd);
       cleanupCall();
     };
-  }, [user, booking, dispatch]);
+  }, [user, booking]);
 
-  // Setup peer when local is ready or signaling state changes
   useEffect(() => {
-    if (!isLocalReady || peerRef.current) {
-      return;
-    }
+    if (!isLocalReady || peerRef.current) return;
 
-    const setupPeer = (isInitiator, receivedOffer = null) => {
-      console.log("🔧 setupPeer", { isInitiator, receivedOffer });
-
+    const setupPeer = (isInitiator, receivedSignal = null) => {
       const peer = new Peer({
         initiator: isInitiator,
-        trickle: true,
         stream: localStreamRef.current,
+        trickle: true,
         config: {
           iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:global.stun.twilio.com:3478" },
-            // Add TURN servers if needed
           ],
         },
       });
 
-      peer.on("signal", (signalData) => {
-        console.log("🔊 peer signal", { signalData, isInitiator });
+      peer.on("signal", (data) => {
         if (isInitiator) {
-          dispatch(setOffer(signalData));
+          dispatch(setOffer(data));
           bookedSocket.emit("callUser", {
             userToCall: remotePeerId,
-            signalData,
+            signalData: data,
             from: user._id,
             bookingId: booking._id,
           });
         } else {
-          dispatch(setAnswer(signalData));
+          dispatch(setAnswer(data));
           bookedSocket.emit("acceptCall", {
             to: remotePeerId,
-            signal: signalData,
+            signal: data,
           });
         }
       });
 
-      peer.on("stream", (stream) => {
-        console.log("📡 peer stream", stream);
-        console.log("Audio tracks:", stream.getAudioTracks());
-        console.log("Video tracks:", stream.getVideoTracks());
-
-        remoteStreamRef.current = stream;
+      peer.on("stream", (remoteStream) => {
         if (userVideo.current) {
-          userVideo.current.srcObject = stream;
-          userVideo.current.muted = false;
+          userVideo.current.srcObject = remoteStream;
           userVideo.current.onloadedmetadata = () => {
             userVideo.current.play().catch((err) => {
               console.warn("play() error:", err);
@@ -163,135 +148,85 @@ export default function VideoCall({ roomId, user, booking }) {
         }
       });
 
-      peer.on("ice", (candidate) => {
-        console.log("🧊 peer ice candidate", candidate);
-        bookedSocket.emit("iceCandidate", {
-          to: remotePeerId,
-          candidate,
-        });
+      peer.on("error", (err) => {
+        console.error("Peer error:", err);
+        toast.error("Peer connection error.");
+        cleanupCall();
       });
 
       peer.on("close", () => {
-        console.log("❌ peer close");
         cleanupCall();
         navigate("/dashboard");
       });
 
-      peer.on("error", (err) => {
-        console.error("⚠ peer error", err);
-        toast.error("Peer connection error. Ending call.");
-        cleanupCall();
-      });
-
       peerRef.current = peer;
 
-      if (!isInitiator && receivedOffer) {
-        console.log("⏳ Receiver signaling offer", receivedOffer);
-        peer.signal(receivedOffer);
+      // If receiving a signal (offer or ICE), apply it
+      if (!isInitiator && receivedSignal) {
+        peer.signal(receivedSignal);
       }
+
+      // Apply any queued ICE candidates
+      iceCandidates.forEach((cand) => peer.signal(cand));
     };
 
-    // Caller scenario
+    // Start peer based on role
     if (callStatus === "ready" && remotePeerId) {
-      setupPeer(true, null);
+      setupPeer(true);
       dispatch(setCallStatus("calling"));
-    }
-
-    // Receiver scenario
-    if (callStatus === "receiving" && offer && !peerRef.current) {
+    } else if (callStatus === "receiving" && offer) {
       setupPeer(false, offer);
       dispatch(setCallStatus("connected"));
     }
-
-    // Signal queued ICE candidates
-    if (peerRef.current && iceCandidates.length > 0) {
-      console.log("🧩 applying queued ICE", iceCandidates);
-      iceCandidates.forEach((cand) => {
-        peerRef.current.signal(cand);
-      });
-    }
-  }, [
-    isLocalReady,
-    callStatus,
-    remotePeerId,
-    offer,
-    iceCandidates,
-    dispatch,
-    navigate,
-    user,
-    booking,
-  ]);
+  }, [isLocalReady, callStatus, remotePeerId, offer, iceCandidates]);
 
   const cleanupCall = () => {
     if (peerRef.current) {
-      try {
-        peerRef.current.destroy();
-      } catch (e) {
-        console.warn("Error destroying peer:", e);
-      }
+      peerRef.current.destroy();
       peerRef.current = null;
     }
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
-    }
-    if (remoteStreamRef.current) {
-      remoteStreamRef.current.getTracks().forEach((t) => t.stop());
-      remoteStreamRef.current = null;
     }
     dispatch(clearVideoCall());
   };
 
   const toggleCamera = () => {
-    const vTrack = localStreamRef.current?.getVideoTracks()[0];
-    if (vTrack) {
-      vTrack.enabled = !vTrack.enabled;
-      setIsCameraOn(vTrack.enabled);
+    const track = localStreamRef.current?.getVideoTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      setIsCameraOn(track.enabled);
     }
   };
 
-  const toggleMicrophone = () => {
-    const aTrack = localStreamRef.current?.getAudioTracks()[0];
-    if (aTrack) {
-      aTrack.enabled = !aTrack.enabled;
-      setIsMicOn(aTrack.enabled);
+  const toggleMic = () => {
+    const track = localStreamRef.current?.getAudioTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      setIsMicOn(track.enabled);
     }
   };
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full gap-2 p-2 md:p-4 bg-gray-100 dark:bg-gray-800">
-      {/* Video panel */}
       <div className="flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-xl p-2 md:p-4 flex-[2] min-h-[300px] md:min-h-[500px]">
         <div className="flex flex-col w-full h-full gap-2">
           {/* Local Video */}
           <div className="relative w-full h-1/2">
             <video
               ref={myVideo}
+              autoPlay
               playsInline
               muted
-              autoPlay
               className="w-full h-full rounded-lg bg-black object-cover transform scale-x-[-1]"
             />
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2 bg-black/40 px-2 py-1 rounded-full shadow-lg">
-              <button
-                onClick={toggleCamera}
-                className="p-2 rounded-full bg-white text-gray-800 dark:bg-gray-700 dark:text-white hover:bg-gray-200 transition"
-              >
-                {isCameraOn ? (
-                  <CameraSolidIcon className="h-5 w-5" />
-                ) : (
-                  <CameraIcon className="h-5 w-5" />
-                )}
+              <button onClick={toggleCamera} className="p-2 rounded-full bg-white text-gray-800 dark:bg-gray-700 dark:text-white hover:bg-gray-200 transition">
+                {isCameraOn ? <CameraSolidIcon className="h-5 w-5" /> : <CameraIcon className="h-5 w-5" />}
               </button>
-              <button
-                onClick={toggleMicrophone}
-                className="p-2 rounded-full bg-white text-gray-800 dark:bg-gray-700 dark:text-white hover:bg-gray-200 transition"
-              >
-                {isMicOn ? (
-                  <MicrophoneSolidIcon className="h-5 w-5" />
-                ) : (
-                  <MicrophoneIcon className="h-5 w-5" />
-                )}
+              <button onClick={toggleMic} className="p-2 rounded-full bg-white text-gray-800 dark:bg-gray-700 dark:text-white hover:bg-gray-200 transition">
+                {isMicOn ? <MicrophoneSolidIcon className="h-5 w-5" /> : <MicrophoneIcon className="h-5 w-5" />}
               </button>
             </div>
           </div>
@@ -300,17 +235,16 @@ export default function VideoCall({ roomId, user, booking }) {
           <div className="relative w-full h-1/2">
             <video
               ref={userVideo}
-              playsInline
               autoPlay
+              playsInline
               muted={false}
-              controls={false}
               className="w-full h-full rounded-lg bg-black object-cover"
             />
           </div>
         </div>
       </div>
 
-      {/* Chat Section */}
+      {/* Chat Panel */}
       <div className="flex-1 md:flex-[1] min-h-[200px] md:min-h-[500px]">
         <ChatRoom roomId={roomId} user={user} booking={booking} />
       </div>
