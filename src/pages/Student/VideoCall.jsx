@@ -26,23 +26,22 @@ import {
 
 // --- FINAL, EXTENDED STUN/TURN CONFIGURATION ---
 const EXTENDED_ICE_SERVERS = [
-    // Google STUN Servers (Reliable STUN)
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    // Twilio STUN/TURN (Reliable, often requires authentication)
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    
-    // Public TURN Relay Server (CRITICAL FOR SYMMETRIC NAT/FIREWALLS)
-    // NOTE: Free credentials can be unstable/unreliable, but worth trying
-    {
-        urls: 'turn:openrelay.metered.ca:80',
-        username: 'openrelay@metered.ca',
-        credential: 'openrelaypassword'
-    },
-    // Another popular public STUN server
-    { urls: 'stun:stun.ekiga.net' },
-    { urls: 'stun:stun.voipbuster.com' },
+    // Google STUN Servers (Reliable STUN)
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    // Twilio STUN/TURN (Reliable, often requires authentication)
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    
+    // Public TURN Relay Server (CRITICAL FOR SYMMETRIC NAT/FIREWALLS)
+    {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelay@metered.ca',
+        credential: 'openrelaypassword'
+    },
+    // Another popular public STUN server
+    { urls: 'stun:stun.ekiga.net' },
+    { urls: 'stun:stun.voipbuster.com' },
 ];
 // ------------------------------------------------
 
@@ -79,16 +78,15 @@ export default function VideoCall({ roomId, user, booking }) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
-    // No need to stop remoteStreamRef tracks here, as destroy() should handle it
     dispatch(clearVideoCall());
   };
 
 
   // Acquire local media & set up socket listeners
   useEffect(() => {
+    // ... (omitted media setup and socket listeners - no changes here)
     if (!user?._id || !booking) return;
 
-    // Setup logic (same as previous working version)
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
@@ -107,9 +105,8 @@ export default function VideoCall({ roomId, user, booking }) {
         dispatch(setCallStatus("idle"));
       });
 
-    // Socket listeners remain unchanged
     const onCallOffer = (signal, fromPeerId, bookingId) => {
-      if (bookingId === booking._id && peerRef.current === null) { // Added check for no existing peer
+      if (bookingId === booking._id && peerRef.current === null) {
         console.log("📩 callOffer received", { fromPeerId, signal });
         dispatch(setRemotePeerId(fromPeerId));
         dispatch(setOffer(signal));
@@ -117,8 +114,6 @@ export default function VideoCall({ roomId, user, booking }) {
         toast.info("Incoming video call...");
       }
     };
-    // ... (omitted other listeners)
-
     const onCallAnswer = (signal) => {
       console.log("📩 callAnswer received", signal);
       dispatch(setAnswer(signal));
@@ -158,6 +153,7 @@ export default function VideoCall({ roomId, user, booking }) {
     };
   }, [user, booking, dispatch, remotePeerId]);
 
+
   // Setup peer when local is ready or signaling state changes
   useEffect(() => {
     if (!isLocalReady || !remotePeerId || peerRef.current) return;
@@ -170,15 +166,34 @@ export default function VideoCall({ roomId, user, booking }) {
         trickle: true,
         stream: null, // CRITICAL: Peer created without stream
         config: {
-          iceServers: EXTENDED_ICE_SERVERS, // USE EXTENDED SERVERS
+          iceServers: EXTENDED_ICE_SERVERS,
         },
-        offerOptions: {
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-        },
+        offerOptions: {
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+        },
       });
 
-      // **CRITICAL: Manually add tracks immediately**
+      // --- DEBUG LOGGING ADDED HERE ---
+      const rtcPeer = peer._pc; // Accessing the underlying RTCPeerConnection object
+      if (rtcPeer) {
+          rtcPeer.oniceconnectionstatechange = () => {
+              console.log(`🧊 ICE Connection State: ${rtcPeer.iceConnectionState}`);
+              if (rtcPeer.iceConnectionState === 'failed' || rtcPeer.iceConnectionState === 'disconnected') {
+                  toast.error(`Connection failed: ${rtcPeer.iceConnectionState}`);
+                  // You might trigger cleanup here eventually, but for debug, just log.
+              }
+          };
+          rtcPeer.onconnectionstatechange = () => {
+              console.log(`🔗 Peer Connection State: ${rtcPeer.connectionState}`);
+          };
+          rtcPeer.onsignalingstatechange = () => {
+              console.log(`📡 Signaling State: ${rtcPeer.signalingState}`);
+          };
+      }
+      // ---------------------------------
+
+      // **CRITICAL: Manually add tracks immediately**
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
           peer.addTrack(track, localStreamRef.current);
@@ -217,7 +232,7 @@ export default function VideoCall({ roomId, user, booking }) {
         }
       });
 
-      // Note: peer.on('ice') is automatically handled by the peer instance and sent via socket.emit('iceCandidate')
+      // Note: peer.on('ice') is automatically handled by the peer instance and sent via socket.emit('iceCandidate')
 
       peer.on("close", () => {
         cleanupCall();
