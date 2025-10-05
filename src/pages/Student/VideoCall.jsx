@@ -1,5 +1,4 @@
 // src/components/VideoCall.jsx
-
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import Peer from "simple-peer";
@@ -48,7 +47,7 @@ export default function VideoCall({ roomId, user, booking }) {
         localStreamRef.current = stream;
         if (myVideo.current) {
           myVideo.current.srcObject = stream;
-          myVideo.current.muted = true; // ensure self video is muted
+          myVideo.current.muted = true;
           myVideo.current.play().catch(console.warn);
         }
         setIsLocalReady(true);
@@ -72,7 +71,7 @@ export default function VideoCall({ roomId, user, booking }) {
       if (peerRef.current) {
         peerRef.current.signal(signal);
       } else {
-        dispatch(setAnswer(signal)); // fallback
+        dispatch(setAnswer(signal));
       }
     };
 
@@ -120,7 +119,9 @@ export default function VideoCall({ roomId, user, booking }) {
       });
 
       peer.on("signal", (data) => {
-        if (isInitiator) {
+        console.log("SIGNAL:", data);
+
+        if (data.type === "offer") {
           dispatch(setOffer(data));
           bookedSocket.emit("callUser", {
             userToCall: remotePeerId,
@@ -128,16 +129,23 @@ export default function VideoCall({ roomId, user, booking }) {
             from: user._id,
             bookingId: booking._id,
           });
-        } else {
+        } else if (data.type === "answer") {
           dispatch(setAnswer(data));
           bookedSocket.emit("acceptCall", {
             to: remotePeerId,
             signal: data,
           });
+        } else {
+          // ICE candidate
+          bookedSocket.emit("iceCandidate", {
+            to: remotePeerId,
+            candidate: data,
+          });
         }
       });
 
       peer.on("stream", (remoteStream) => {
+        console.log("REMOTE STREAM RECEIVED", remoteStream);
         if (userVideo.current) {
           userVideo.current.srcObject = remoteStream;
           userVideo.current.onloadedmetadata = () => {
@@ -161,16 +169,13 @@ export default function VideoCall({ roomId, user, booking }) {
 
       peerRef.current = peer;
 
-      // If receiving a signal (offer or ICE), apply it
       if (!isInitiator && receivedSignal) {
         peer.signal(receivedSignal);
       }
 
-      // Apply any queued ICE candidates
       iceCandidates.forEach((cand) => peer.signal(cand));
     };
 
-    // Start peer based on role
     if (callStatus === "ready" && remotePeerId) {
       setupPeer(true);
       dispatch(setCallStatus("calling"));
@@ -212,7 +217,6 @@ export default function VideoCall({ roomId, user, booking }) {
     <div className="flex flex-col md:flex-row h-screen w-full gap-2 p-2 md:p-4 bg-gray-100 dark:bg-gray-800">
       <div className="flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-xl p-2 md:p-4 flex-[2] min-h-[300px] md:min-h-[500px]">
         <div className="flex flex-col w-full h-full gap-2">
-          {/* Local Video */}
           <div className="relative w-full h-1/2">
             <video
               ref={myVideo}
@@ -231,7 +235,6 @@ export default function VideoCall({ roomId, user, booking }) {
             </div>
           </div>
 
-          {/* Remote Video */}
           <div className="relative w-full h-1/2">
             <video
               ref={userVideo}
@@ -244,10 +247,10 @@ export default function VideoCall({ roomId, user, booking }) {
         </div>
       </div>
 
-      {/* Chat Panel */}
       <div className="flex-1 md:flex-[1] min-h-[200px] md:min-h-[500px]">
         <ChatRoom roomId={roomId} user={user} booking={booking} />
       </div>
     </div>
   );
 }
+ 
