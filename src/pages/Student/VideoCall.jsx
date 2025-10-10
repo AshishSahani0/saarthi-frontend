@@ -10,7 +10,6 @@ import {
   setRemotePeerId,
   clearVideoCall,
 } from "../../redux/slices/videoSlice";
-import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff } from "lucide-react";
 
 const VideoCall = ({ bookingId, targetUserId }) => {
@@ -36,7 +35,7 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       ],
     });
 
-    // Remote stream handling
+    // Remote stream
     const remoteStream = new MediaStream();
     remoteVideoRef.current.srcObject = remoteStream;
 
@@ -46,7 +45,7 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       });
     };
 
-    // Send local ICE candidates to the remote peer
+    // ICE candidates
     peerConnection.current.onicecandidate = (event) => {
       if (event.candidate && remotePeerId) {
         bookedSocket.emit("iceCandidate", {
@@ -56,7 +55,7 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       }
     };
 
-    // Get local stream and add to peer connection
+    // Local media
     try {
       localStream.current = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -71,11 +70,10 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     }
   };
 
-  // ========== 2️⃣ Start a Call (Offer) ==========
+  // ========== 2️⃣ Start a Call ==========
   const startCall = async () => {
     await setupPeerConnection();
     dispatch(setCallStatus("calling"));
-    console.log("📞 Starting call...");
 
     const offerDesc = await peerConnection.current.createOffer();
     await peerConnection.current.setLocalDescription(offerDesc);
@@ -88,11 +86,9 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     });
   };
 
-  // ========== 3️⃣ Accept Incoming Call (Answer) ==========
+  // ========== 3️⃣ Accept Incoming Call ==========
   const acceptCall = async () => {
     await setupPeerConnection();
-    console.log("✅ Accepting incoming call...");
-
     await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
 
     const answerDesc = await peerConnection.current.createAnswer();
@@ -110,47 +106,46 @@ const VideoCall = ({ bookingId, targetUserId }) => {
   useEffect(() => {
     if (!peerConnection.current) return;
 
-    bookedSocket.on("iceCandidate", async (candidate) => {
+    const handleIce = async (candidate) => {
       try {
         await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
         console.error("Error adding ICE candidate:", err);
       }
-    });
+    };
+
+    bookedSocket.on("iceCandidate", handleIce);
+    return () => bookedSocket.off("iceCandidate", handleIce);
   }, [remotePeerId]);
 
-  // ========== 5️⃣ When Offer is Received ==========
+  // ========== 5️⃣ Socket Listeners ==========
   useEffect(() => {
-    bookedSocket.on("callOffer", async (offer, fromPeerId, bookingId) => {
-      console.log("📩 Received callOffer from", fromPeerId);
-      dispatch(setOffer(offer));
+    const handleOffer = (incomingOffer, fromPeerId, bookingIdReceived) => {
+      if (bookingIdReceived !== bookingId) return;
+      dispatch(setOffer(incomingOffer));
       dispatch(setRemotePeerId(fromPeerId));
       dispatch(setCallStatus("receiving"));
-    });
+    };
 
-    bookedSocket.on("callAnswer", async (answer) => {
-      console.log("📩 Received callAnswer");
-      if (peerConnection.current) {
-        await peerConnection.current.setRemoteDescription(
-          new RTCSessionDescription(answer)
-        );
-        dispatch(setCallStatus("connected"));
-      }
-    });
+    const handleAnswer = async (incomingAnswer) => {
+      if (!peerConnection.current) return;
+      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(incomingAnswer));
+      dispatch(setCallStatus("connected"));
+    };
 
+    bookedSocket.on("callOffer", handleOffer);
+    bookedSocket.on("callAnswer", handleAnswer);
     bookedSocket.on("callEnded", endCall);
 
     return () => {
-      bookedSocket.off("callOffer");
-      bookedSocket.off("callAnswer");
-      bookedSocket.off("iceCandidate");
-      bookedSocket.off("callEnded");
+      bookedSocket.off("callOffer", handleOffer);
+      bookedSocket.off("callAnswer", handleAnswer);
+      bookedSocket.off("callEnded", endCall);
     };
-  }, []);
+  }, [dispatch, bookingId]);
 
   // ========== 6️⃣ End Call ==========
   const endCall = () => {
-    console.log("🛑 Ending call...");
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
@@ -201,23 +196,35 @@ const VideoCall = ({ bookingId, targetUserId }) => {
 
       <div className="flex gap-4 mt-4">
         {callStatus === "idle" && (
-          <Button onClick={startCall} className="bg-green-600 hover:bg-green-700">
-            <Phone className="mr-2" size={18} /> Call
-          </Button>
+          <button
+            onClick={startCall}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg"
+          >
+            <Phone size={18} /> Call
+          </button>
         )}
         {callStatus === "receiving" && (
-          <Button onClick={acceptCall} className="bg-blue-600 hover:bg-blue-700">
-            <Phone className="mr-2" size={18} /> Accept
-          </Button>
+          <button
+            onClick={acceptCall}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg"
+          >
+            <Phone size={18} /> Accept
+          </button>
         )}
         {callStatus === "connected" && (
           <>
-            <Button onClick={toggleMute} className="bg-gray-600 hover:bg-gray-700">
+            <button
+              onClick={toggleMute}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
+            >
               {isMuted ? "Unmute" : "Mute"}
-            </Button>
-            <Button onClick={endCall} className="bg-red-600 hover:bg-red-700">
-              <PhoneOff className="mr-2" size={18} /> End
-            </Button>
+            </button>
+            <button
+              onClick={endCall}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg"
+            >
+              <PhoneOff size={18} /> End
+            </button>
           </>
         )}
       </div>
