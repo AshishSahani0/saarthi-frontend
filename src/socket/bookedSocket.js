@@ -1,5 +1,3 @@
-// src/socket/bookedSocket.js
-
 import { io } from "socket.io-client";
 import store from "../redux/store";
 import {
@@ -29,12 +27,21 @@ const bookedSocket = io(`${SOCKET_URL}/booked`, {
   timeout: 20000,
 });
 
-// Delayed connect in case client initialization order matters
+// Safe delayed connect
 setTimeout(() => {
-  if (!bookedSocket.connected) {
-    bookedSocket.connect();
-  }
+  if (!bookedSocket.connected) bookedSocket.connect();
 }, 500);
+
+const identifyUser = () => {
+  const state = store.getState();
+  const user = state.auth?.user;
+  if (user?._id) {
+    bookedSocket.emit("identify", { userId: user._id, role: user.role });
+    console.log(`[socket] identify emitted for user: ${user._id}`);
+  } else {
+    console.warn("[socket] User not logged in. Cannot identify.");
+  }
+};
 
 const rejoinRoom = () => {
   const state = store.getState();
@@ -50,63 +57,60 @@ const rejoinRoom = () => {
   }
 };
 
-// ----- Chat events -----
+// ===== Chat Events =====
 bookedSocket.on("receiveMessage", (message) => {
   store.dispatch(addMessage(message));
 });
+
 bookedSocket.on("receiveMessagesBatch", (messages) => {
   store.dispatch(mergeMessages(messages));
 });
 
-// ----- Video call / signaling events -----
+// ===== Video Call Signaling =====
 bookedSocket.on("callOffer", (offer, fromPeerId, bookingId) => {
-  console.log("[socket] callOffer received", { offer, fromPeerId, bookingId });
+  console.log("[socket] callOffer received", { fromPeerId });
   store.dispatch(setOffer(offer));
   store.dispatch(setRemotePeerId(fromPeerId));
   store.dispatch(setCallStatus("receiving"));
 });
+
 bookedSocket.on("callAnswer", (answer) => {
-  console.log("[socket] callAnswer received", answer);
+  console.log("[socket] callAnswer received");
   store.dispatch(setAnswer(answer));
   store.dispatch(setCallStatus("connected"));
 });
+
 bookedSocket.on("iceCandidate", (candidate) => {
-  console.log("[socket] iceCandidate received", candidate);
+  console.log("[socket] iceCandidate received");
   store.dispatch(addIceCandidate(candidate));
 });
+
 bookedSocket.on("callEnded", () => {
-  console.log("[socket] callEnded");
+  console.log("[socket] callEnded received");
   store.dispatch(clearVideoCall());
 });
 
-// ----- Reconnect logic & identification -----
+// ===== Connection & Reconnect =====
 bookedSocket.on("connect", () => {
-  console.log("[socket] connected:", bookedSocket.id);
+  console.log(`[socket] connected: ${bookedSocket.id}`);
   toast.dismiss("socket-reconnect");
-  const state = store.getState();
-  const user = state.auth?.user;
-  if (user) {
-    bookedSocket.emit("identify", { userId: user._id, role: user.role });
-  }
+  identifyUser();
   rejoinRoom();
 });
+
 bookedSocket.on("disconnect", (reason) => {
   console.warn("[socket] disconnected:", reason);
 });
+
 bookedSocket.on("reconnect_attempt", (attempt) => {
-  toast.loading(`Reconnecting... (${attempt})`, {
-    toastId: "socket-reconnect",
-  });
+  toast.loading(`Reconnecting... (${attempt})`, { toastId: "socket-reconnect" });
 });
+
 bookedSocket.on("reconnect", () => {
   console.log("[socket] reconnected");
   toast.dismiss("socket-reconnect");
   toast.success("Reconnected to server");
-  const state = store.getState();
-  const user = state.auth?.user;
-  if (user) {
-    bookedSocket.emit("identify", { userId: user._id, role: user.role });
-  }
+  identifyUser();
   rejoinRoom();
 });
 

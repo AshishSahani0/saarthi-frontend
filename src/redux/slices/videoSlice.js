@@ -1,57 +1,38 @@
-// src/redux/slices/videoSlice.js
-
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  callStatus: "idle", // "idle" | "ready" | "calling" | "receiving" | "connected"
+  callStatus: "idle", // idle | calling | receiving | connected
   offer: null,
   answer: null,
-  iceCandidates: [], // queued ICE before peer exists
-  callError: null,
-  peerId: null,
   remotePeerId: null,
+  iceCandidates: [],
 };
 
 const videoSlice = createSlice({
   name: "video",
   initialState,
   reducers: {
-    setCallStatus(state, action) {
+    setCallStatus: (state, action) => {
       state.callStatus = action.payload;
-      if (action.payload === "idle" || action.payload === "ended") {
-        // reset entire state
-        Object.assign(state, { ...initialState });
-      }
     },
-    setOffer(state, action) {
+    setOffer: (state, action) => {
       state.offer = action.payload;
     },
-    setAnswer(state, action) {
+    setAnswer: (state, action) => {
       state.answer = action.payload;
     },
-    addIceCandidate(state, action) {
-      const candidate = action.payload;
-      if (!candidate) return;
-      // Avoid duplicate candidates
-      if (
-        !state.iceCandidates.some(
-          (c) => JSON.stringify(c) === JSON.stringify(candidate)
-        )
-      ) {
-        state.iceCandidates.push(candidate);
-      }
-    },
-    setCallError(state, action) {
-      state.callError = action.payload;
-    },
-    setPeerId(state, action) {
-      state.peerId = action.payload;
-    },
-    setRemotePeerId(state, action) {
+    setRemotePeerId: (state, action) => {
       state.remotePeerId = action.payload;
     },
-    clearVideoCall(state) {
-      Object.assign(state, { ...initialState });
+    addIceCandidate: (state, action) => {
+      state.iceCandidates.push(action.payload);
+    },
+    clearVideoCall: (state) => {
+      state.callStatus = "idle";
+      state.offer = null;
+      state.answer = null;
+      state.remotePeerId = null;
+      state.iceCandidates = [];
     },
   },
 });
@@ -60,10 +41,8 @@ export const {
   setCallStatus,
   setOffer,
   setAnswer,
-  addIceCandidate,
-  setCallError,
-  setPeerId,
   setRemotePeerId,
+  addIceCandidate,
   clearVideoCall,
 } = videoSlice.actions;
 
