@@ -1,3 +1,4 @@
+// src/components/video/VideoCall.jsx
 import React, { useEffect, useRef, useState } from "react";
 import bookedSocket from "../../socket/bookedSocket";
 import { useSelector, useDispatch } from "react-redux";
@@ -9,29 +10,12 @@ import {
   setRemotePeerId,
   clearVideoCall,
 } from "../../redux/slices/videoSlice";
-import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
-
-// ✅ Tailwind Button Component
-const Button = ({ children, onClick, variant = "primary" }) => {
-  const colors = {
-    primary: "bg-blue-600 hover:bg-blue-700",
-    danger: "bg-red-600 hover:bg-red-700",
-    success: "bg-green-600 hover:bg-green-700",
-    gray: "bg-gray-600 hover:bg-gray-700",
-  };
-  return (
-    <button
-      onClick={onClick}
-      className={`${colors[variant]} text-white px-4 py-2 rounded-lg flex items-center gap-2`}
-    >
-      {children}
-    </button>
-  );
-};
+import { Button } from "../../components/ui/button";
+import { Phone, PhoneOff } from "lucide-react";
 
 const VideoCall = ({ bookingId, targetUserId }) => {
   const dispatch = useDispatch();
-  const { offer, answer, remotePeerId, callStatus, iceCandidates } = useSelector(
+  const { offer, answer, remotePeerId, callStatus } = useSelector(
     (state) => state.video
   );
   const { user } = useSelector((state) => state.auth);
@@ -40,9 +24,10 @@ const VideoCall = ({ bookingId, targetUserId }) => {
   const remoteVideoRef = useRef(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
+
   const [isMuted, setIsMuted] = useState(false);
 
-  // ========== 1️⃣ Setup Peer Connection ==========
+  // 🔹 Setup PeerConnection
   const setupPeerConnection = async () => {
     peerConnection.current = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -51,7 +36,6 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     const remoteStream = new MediaStream();
     remoteVideoRef.current.srcObject = remoteStream;
 
-    // Track remote media
     peerConnection.current.ontrack = (event) => {
       console.log("🎥 Remote track received");
       event.streams[0].getTracks().forEach((track) => {
@@ -59,10 +43,8 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       });
     };
 
-    // Send ICE candidates
     peerConnection.current.onicecandidate = (event) => {
       if (event.candidate && remotePeerId) {
-        console.log("📨 Sending ICE candidate");
         bookedSocket.emit("iceCandidate", {
           to: remotePeerId,
           candidate: event.candidate,
@@ -70,7 +52,6 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       }
     };
 
-    // Get local stream
     try {
       localStream.current = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -81,15 +62,14 @@ const VideoCall = ({ bookingId, targetUserId }) => {
         peerConnection.current.addTrack(track, localStream.current)
       );
     } catch (err) {
-      console.error("Error accessing camera/mic:", err);
+      console.error("Camera/mic access error:", err);
     }
   };
 
-  // ========== 2️⃣ Start Call ==========
+  // 🔹 Start Call
   const startCall = async () => {
     await setupPeerConnection();
     dispatch(setCallStatus("calling"));
-    console.log("📞 Starting call...");
 
     const offerDesc = await peerConnection.current.createOffer();
     await peerConnection.current.setLocalDescription(offerDesc);
@@ -100,15 +80,11 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       from: user._id,
       bookingId,
     });
-
-    dispatch(setOffer(offerDesc));
   };
 
-  // ========== 3️⃣ Accept Call ==========
+  // 🔹 Accept Call
   const acceptCall = async () => {
     await setupPeerConnection();
-    console.log("✅ Accepting incoming call...");
-
     await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
 
     const answerDesc = await peerConnection.current.createAnswer();
@@ -122,36 +98,34 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     dispatch(setCallStatus("connected"));
   };
 
-  // ========== 4️⃣ Handle Offer / Answer / ICE ==========
+  // 🔹 Handle ICE candidates (both sides)
+  useEffect(() => {
+    if (!peerConnection.current) return;
+
+    bookedSocket.on("iceCandidate", async (candidate) => {
+      try {
+        console.log("❄️ ICE candidate received");
+        await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.error("Error adding ICE:", err);
+      }
+    });
+  }, [remotePeerId]);
+
+  // 🔹 Socket listeners (Offer, Answer, End)
   useEffect(() => {
     bookedSocket.on("callOffer", async (offer, fromPeerId, bookingId) => {
-      console.log("📩 Received Offer from", fromPeerId);
+      console.log("📩 Offer received from", fromPeerId);
       dispatch(setOffer(offer));
       dispatch(setRemotePeerId(fromPeerId));
       dispatch(setCallStatus("receiving"));
     });
 
     bookedSocket.on("callAnswer", async (answer) => {
-      console.log("📩 Received Answer");
+      console.log("📩 Answer received");
       if (peerConnection.current) {
-        await peerConnection.current.setRemoteDescription(
-          new RTCSessionDescription(answer)
-        );
+        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
         dispatch(setCallStatus("connected"));
-      }
-    });
-
-    bookedSocket.on("iceCandidate", async (candidate) => {
-      console.log("📩 Received ICE candidate");
-      try {
-        if (peerConnection.current?.remoteDescription) {
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } else {
-          // queue if remote description not yet set
-          dispatch(addIceCandidate(candidate));
-        }
-      } catch (err) {
-        console.error("Error adding ICE candidate:", err);
       }
     });
 
@@ -163,24 +137,11 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       bookedSocket.off("iceCandidate");
       bookedSocket.off("callEnded");
     };
-  }, [remotePeerId]);
+  }, []);
 
-  // apply queued ICE after remote desc is set
-  useEffect(() => {
-    if (peerConnection.current && peerConnection.current.remoteDescription && iceCandidates.length > 0) {
-      iceCandidates.forEach(async (candidate) => {
-        try {
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (e) {
-          console.error("Failed adding queued ICE", e);
-        }
-      });
-    }
-  }, [iceCandidates]);
-
-  // ========== 5️⃣ End Call ==========
+  // 🔹 End Call
   const endCall = () => {
-    console.log("🛑 Ending call...");
+    console.log("🛑 Ending call");
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
@@ -192,7 +153,7 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     bookedSocket.emit("callEnded", { to: remotePeerId });
   };
 
-  // ========== 6️⃣ Mute Toggle ==========
+  // 🔹 Mute / Unmute
   const toggleMute = () => {
     const audioTrack = localStream.current?.getAudioTracks()[0];
     if (audioTrack) {
@@ -202,8 +163,8 @@ const VideoCall = ({ bookingId, targetUserId }) => {
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 bg-gray-900 text-white rounded-2xl shadow-lg w-full max-w-xl mx-auto">
-      <h2 className="text-lg font-semibold mb-2">
+    <div className="flex flex-col items-center gap-4 p-4 bg-gray-900 text-white rounded-2xl shadow-lg w-full max-w-lg mx-auto">
+      <h2 className="text-lg font-semibold">
         {callStatus === "calling"
           ? "Calling..."
           : callStatus === "receiving"
@@ -231,23 +192,22 @@ const VideoCall = ({ bookingId, targetUserId }) => {
 
       <div className="flex gap-4 mt-4">
         {callStatus === "idle" && (
-          <Button variant="success" onClick={startCall}>
-            <Phone size={18} /> Call
+          <Button onClick={startCall} className="bg-green-600 hover:bg-green-700">
+            <Phone className="mr-2" size={18} /> Call
           </Button>
         )}
         {callStatus === "receiving" && (
-          <Button variant="primary" onClick={acceptCall}>
-            <Phone size={18} /> Accept
+          <Button onClick={acceptCall} className="bg-blue-600 hover:bg-blue-700">
+            <Phone className="mr-2" size={18} /> Accept
           </Button>
         )}
         {callStatus === "connected" && (
           <>
-            <Button variant="gray" onClick={toggleMute}>
-              {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+            <Button onClick={toggleMute} className="bg-gray-600 hover:bg-gray-700">
               {isMuted ? "Unmute" : "Mute"}
             </Button>
-            <Button variant="danger" onClick={endCall}>
-              <PhoneOff size={18} /> End
+            <Button onClick={endCall} className="bg-red-600 hover:bg-red-700">
+              <PhoneOff className="mr-2" size={18} /> End
             </Button>
           </>
         )}
