@@ -1,4 +1,3 @@
-// src/components/video/VideoCall.jsx
 import React, { useEffect, useRef, useState } from "react";
 import bookedSocket from "../../socket/bookedSocket";
 import { useSelector, useDispatch } from "react-redux";
@@ -10,11 +9,29 @@ import {
   setRemotePeerId,
   clearVideoCall,
 } from "../../redux/slices/videoSlice";
-import { Phone, PhoneOff } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
+
+// ✅ Tailwind Button Component
+const Button = ({ children, onClick, variant = "primary" }) => {
+  const colors = {
+    primary: "bg-blue-600 hover:bg-blue-700",
+    danger: "bg-red-600 hover:bg-red-700",
+    success: "bg-green-600 hover:bg-green-700",
+    gray: "bg-gray-600 hover:bg-gray-700",
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={`${colors[variant]} text-white px-4 py-2 rounded-lg flex items-center gap-2`}
+    >
+      {children}
+    </button>
+  );
+};
 
 const VideoCall = ({ bookingId, targetUserId }) => {
   const dispatch = useDispatch();
-  const { offer, answer, remotePeerId, callStatus } = useSelector(
+  const { offer, answer, remotePeerId, callStatus, iceCandidates } = useSelector(
     (state) => state.video
   );
   const { user } = useSelector((state) => state.auth);
@@ -23,31 +40,29 @@ const VideoCall = ({ bookingId, targetUserId }) => {
   const remoteVideoRef = useRef(null);
   const peerConnection = useRef(null);
   const localStream = useRef(null);
-
   const [isMuted, setIsMuted] = useState(false);
 
   // ========== 1️⃣ Setup Peer Connection ==========
   const setupPeerConnection = async () => {
     peerConnection.current = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-      ],
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
 
-    // Remote stream
     const remoteStream = new MediaStream();
     remoteVideoRef.current.srcObject = remoteStream;
 
+    // Track remote media
     peerConnection.current.ontrack = (event) => {
+      console.log("🎥 Remote track received");
       event.streams[0].getTracks().forEach((track) => {
         remoteStream.addTrack(track);
       });
     };
 
-    // ICE candidates
+    // Send ICE candidates
     peerConnection.current.onicecandidate = (event) => {
       if (event.candidate && remotePeerId) {
+        console.log("📨 Sending ICE candidate");
         bookedSocket.emit("iceCandidate", {
           to: remotePeerId,
           candidate: event.candidate,
@@ -55,7 +70,7 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       }
     };
 
-    // Local media
+    // Get local stream
     try {
       localStream.current = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -70,10 +85,11 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     }
   };
 
-  // ========== 2️⃣ Start a Call ==========
+  // ========== 2️⃣ Start Call ==========
   const startCall = async () => {
     await setupPeerConnection();
     dispatch(setCallStatus("calling"));
+    console.log("📞 Starting call...");
 
     const offerDesc = await peerConnection.current.createOffer();
     await peerConnection.current.setLocalDescription(offerDesc);
@@ -84,11 +100,15 @@ const VideoCall = ({ bookingId, targetUserId }) => {
       from: user._id,
       bookingId,
     });
+
+    dispatch(setOffer(offerDesc));
   };
 
-  // ========== 3️⃣ Accept Incoming Call ==========
+  // ========== 3️⃣ Accept Call ==========
   const acceptCall = async () => {
     await setupPeerConnection();
+    console.log("✅ Accepting incoming call...");
+
     await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
 
     const answerDesc = await peerConnection.current.createAnswer();
@@ -102,50 +122,65 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     dispatch(setCallStatus("connected"));
   };
 
-  // ========== 4️⃣ Handle ICE Candidates ==========
+  // ========== 4️⃣ Handle Offer / Answer / ICE ==========
   useEffect(() => {
-    if (!peerConnection.current) return;
+    bookedSocket.on("callOffer", async (offer, fromPeerId, bookingId) => {
+      console.log("📩 Received Offer from", fromPeerId);
+      dispatch(setOffer(offer));
+      dispatch(setRemotePeerId(fromPeerId));
+      dispatch(setCallStatus("receiving"));
+    });
 
-    const handleIce = async (candidate) => {
+    bookedSocket.on("callAnswer", async (answer) => {
+      console.log("📩 Received Answer");
+      if (peerConnection.current) {
+        await peerConnection.current.setRemoteDescription(
+          new RTCSessionDescription(answer)
+        );
+        dispatch(setCallStatus("connected"));
+      }
+    });
+
+    bookedSocket.on("iceCandidate", async (candidate) => {
+      console.log("📩 Received ICE candidate");
       try {
-        await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        if (peerConnection.current?.remoteDescription) {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } else {
+          // queue if remote description not yet set
+          dispatch(addIceCandidate(candidate));
+        }
       } catch (err) {
         console.error("Error adding ICE candidate:", err);
       }
-    };
+    });
 
-    bookedSocket.on("iceCandidate", handleIce);
-    return () => bookedSocket.off("iceCandidate", handleIce);
-  }, [remotePeerId]);
-
-  // ========== 5️⃣ Socket Listeners ==========
-  useEffect(() => {
-    const handleOffer = (incomingOffer, fromPeerId, bookingIdReceived) => {
-      if (bookingIdReceived !== bookingId) return;
-      dispatch(setOffer(incomingOffer));
-      dispatch(setRemotePeerId(fromPeerId));
-      dispatch(setCallStatus("receiving"));
-    };
-
-    const handleAnswer = async (incomingAnswer) => {
-      if (!peerConnection.current) return;
-      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(incomingAnswer));
-      dispatch(setCallStatus("connected"));
-    };
-
-    bookedSocket.on("callOffer", handleOffer);
-    bookedSocket.on("callAnswer", handleAnswer);
     bookedSocket.on("callEnded", endCall);
 
     return () => {
-      bookedSocket.off("callOffer", handleOffer);
-      bookedSocket.off("callAnswer", handleAnswer);
-      bookedSocket.off("callEnded", endCall);
+      bookedSocket.off("callOffer");
+      bookedSocket.off("callAnswer");
+      bookedSocket.off("iceCandidate");
+      bookedSocket.off("callEnded");
     };
-  }, [dispatch, bookingId]);
+  }, [remotePeerId]);
 
-  // ========== 6️⃣ End Call ==========
+  // apply queued ICE after remote desc is set
+  useEffect(() => {
+    if (peerConnection.current && peerConnection.current.remoteDescription && iceCandidates.length > 0) {
+      iceCandidates.forEach(async (candidate) => {
+        try {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("Failed adding queued ICE", e);
+        }
+      });
+    }
+  }, [iceCandidates]);
+
+  // ========== 5️⃣ End Call ==========
   const endCall = () => {
+    console.log("🛑 Ending call...");
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
@@ -157,7 +192,7 @@ const VideoCall = ({ bookingId, targetUserId }) => {
     bookedSocket.emit("callEnded", { to: remotePeerId });
   };
 
-  // ========== 7️⃣ Mute / Unmute ==========
+  // ========== 6️⃣ Mute Toggle ==========
   const toggleMute = () => {
     const audioTrack = localStream.current?.getAudioTracks()[0];
     if (audioTrack) {
@@ -167,8 +202,8 @@ const VideoCall = ({ bookingId, targetUserId }) => {
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 bg-gray-900 text-white rounded-2xl shadow-lg w-full max-w-lg mx-auto">
-      <h2 className="text-lg font-semibold">
+    <div className="flex flex-col items-center gap-4 p-4 bg-gray-900 text-white rounded-2xl shadow-lg w-full max-w-xl mx-auto">
+      <h2 className="text-lg font-semibold mb-2">
         {callStatus === "calling"
           ? "Calling..."
           : callStatus === "receiving"
@@ -196,35 +231,24 @@ const VideoCall = ({ bookingId, targetUserId }) => {
 
       <div className="flex gap-4 mt-4">
         {callStatus === "idle" && (
-          <button
-            onClick={startCall}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg"
-          >
+          <Button variant="success" onClick={startCall}>
             <Phone size={18} /> Call
-          </button>
+          </Button>
         )}
         {callStatus === "receiving" && (
-          <button
-            onClick={acceptCall}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg"
-          >
+          <Button variant="primary" onClick={acceptCall}>
             <Phone size={18} /> Accept
-          </button>
+          </Button>
         )}
         {callStatus === "connected" && (
           <>
-            <button
-              onClick={toggleMute}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg"
-            >
+            <Button variant="gray" onClick={toggleMute}>
+              {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
               {isMuted ? "Unmute" : "Mute"}
-            </button>
-            <button
-              onClick={endCall}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg"
-            >
+            </Button>
+            <Button variant="danger" onClick={endCall}>
               <PhoneOff size={18} /> End
-            </button>
+            </Button>
           </>
         )}
       </div>
